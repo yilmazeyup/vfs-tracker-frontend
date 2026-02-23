@@ -17,12 +17,13 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
   });
   
   // Use preferences from props if available, otherwise use defaults
-  const { selectedCountry, selectedOffices, scanInterval, notifications } = preferences || {
-    selectedCountry: 'netherlands',
-    selectedOffices: ['ankara'],
-    scanInterval: 300,
-    notifications: { telegram: true, email: false, sound: true }
-  };
+  const { selectedCountry, selectedOffices, scanInterval, notifications } = preferences || {};
+  
+  // Ensure we have valid defaults and arrays
+  const safeSelectedCountry = selectedCountry || 'netherlands';
+  const safeSelectedOffices = Array.isArray(selectedOffices) ? selectedOffices : [];
+  const safeScanInterval = scanInterval || 300;
+  const safeNotifications = notifications || { telegram: true, email: false, sound: true };
   
   const [activities, setActivities] = useState([]);
   const [credentials, setCredentials] = useState({
@@ -32,10 +33,10 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
   const soundRef = useRef(null);
   
   // Helper functions to update preferences
-  const setSelectedCountry = (value) => setPreferences({ ...preferences, selectedCountry: value });
-  const setSelectedOffices = (value) => setPreferences({ ...preferences, selectedOffices: value });
-  const setScanInterval = (value) => setPreferences({ ...preferences, scanInterval: value });
-  const setNotifications = (value) => setPreferences({ ...preferences, notifications: value });
+  const setSelectedCountry = (value) => setPreferences(prev => ({ ...prev, selectedCountry: value }));
+  const setSelectedOffices = (value) => setPreferences(prev => ({ ...prev, selectedOffices: Array.isArray(value) ? value : [] }));
+  const setScanInterval = (value) => setPreferences(prev => ({ ...prev, scanInterval: value }));
+  const setNotifications = (value) => setPreferences(prev => ({ ...prev, notifications: value }));
 
   const countries = {
     netherlands: { 
@@ -62,7 +63,7 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
   };
 
   const startMonitoring = async () => {
-    if (selectedOffices.length === 0) {
+    if (safeSelectedOffices.length === 0) {
       toast.error('Lütfen en az bir ofis seçin!');
       return;
     }
@@ -74,7 +75,7 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
 
     setMonitoring(true);
     toast.success('🚀 VFS taraması başlatıldı!');
-    addActivity('info', '🚀 Tarama başlatıldı', `${selectedOffices.length} ofis taranıyor`);
+    addActivity('info', '🚀 Tarama başlatıldı', `${safeSelectedOffices.length} ofis taranıyor`);
     
     // Simulate scanning activity
     const simulateScanning = () => {
@@ -94,7 +95,7 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
         currentChance += scenario.chance;
         if (random <= currentChance) {
           if (scenario.type === 'success') {
-            const office = selectedOffices[Math.floor(Math.random() * selectedOffices.length)];
+            const office = safeSelectedOffices[Math.floor(Math.random() * safeSelectedOffices.length)];
             addActivity('success', `✅ ${office} taraması tamamlandı`, 'Randevu bulunamadı');
           } else if (scenario.type === 'error') {
             const errors = [
@@ -107,7 +108,7 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
             addActivity('error', `❌ ${error}`, 'VFS sistem hatası');
             setStats(prev => ({ ...prev, errors: prev.errors + 1 }));
           } else if (scenario.type === 'appointment') {
-            const office = selectedOffices[Math.floor(Math.random() * selectedOffices.length)];
+            const office = safeSelectedOffices[Math.floor(Math.random() * safeSelectedOffices.length)];
             const date = new Date();
             date.setDate(date.getDate() + Math.floor(Math.random() * 30) + 1);
             
@@ -126,7 +127,7 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
         lastScan: new Date().toLocaleTimeString('tr-TR')
       }));
 
-      setTimeout(simulateScanning, scanInterval * 1000);
+      setTimeout(simulateScanning, safeScanInterval * 1000);
     };
     
     setTimeout(simulateScanning, 2000);
@@ -139,11 +140,12 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
   };
 
   const handleOfficeToggle = (office) => {
-    setSelectedOffices(prev => 
-      prev.includes(office) 
-        ? prev.filter(o => o !== office)
-        : [...prev, office]
-    );
+    setSelectedOffices(prev => {
+      const currentOffices = Array.isArray(prev) ? prev : [];
+      return currentOffices.includes(office) 
+        ? currentOffices.filter(o => o !== office)
+        : [...currentOffices, office];
+    });
   };
 
   return (
@@ -161,7 +163,7 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
       
       {/* Notification Settings */}
       <NotificationSettings 
-        notifications={notifications} 
+        notifications={safeNotifications} 
         setNotifications={setNotifications} 
       />
 
@@ -191,7 +193,7 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
         <div className="stat-card">
           <div className="stat-icon">🏢</div>
           <div className="stat-content">
-            <h3>{selectedOffices.length}</h3>
+            <h3>{safeSelectedOffices.length}</h3>
             <p>Aktif Ofis</p>
           </div>
         </div>
@@ -216,7 +218,7 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
         <h2>Tarama Ayarları</h2>
         
         <CountrySelector
-          selectedCountry={selectedCountry}
+          selectedCountry={safeSelectedCountry}
           onCountrySelect={(country) => {
             setSelectedCountry(country);
             setSelectedOffices([]);
@@ -227,9 +229,9 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
         <div className="control-group">
           <label>Ofis Seçimi</label>
           <OfficeSelector
-            selectedOffices={selectedOffices}
+            selectedOffices={safeSelectedOffices}
             onOfficeToggle={handleOfficeToggle}
-            offices={countries[selectedCountry].offices}
+            offices={countries[safeSelectedCountry].offices}
           />
         </div>
 
@@ -237,7 +239,7 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
           <label>Tarama Aralığı (saniye)</label>
           <input
             type="number"
-            value={scanInterval}
+            value={safeScanInterval}
             onChange={(e) => setScanInterval(parseInt(e.target.value))}
             min="60"
             max="3600"
@@ -274,7 +276,7 @@ const Dashboard = ({ monitoring, setMonitoring, preferences, setPreferences }) =
             <p>Randevular taranıyor...</p>
           </div>
           <div className="scanning-offices">
-            {selectedOffices.map(office => (
+            {safeSelectedOffices.map(office => (
               <div key={office} className="office-status">
                 <span className="office-name">{office}</span>
                 <span className="status-active">● Aktif</span>
